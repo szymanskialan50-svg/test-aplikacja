@@ -88,6 +88,7 @@ jobs:
 
       # ── Code signing ─────────────────────────────────────────
       - name: Install certificate & provisioning profile
+        if: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' && secrets.P12_PASSWORD != '' && secrets.BUILD_PROVISION_PROFILE_BASE64 != '' && secrets.KEYCHAIN_PASSWORD != '' }}
         env:
           CERT_B64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           CERT_PASS: ${{ secrets.P12_PASSWORD }}
@@ -139,6 +140,7 @@ jobs:
 
       # ── Xcode Archive ─────────────────────────────────────────
       - name: Build Xcode archive
+        if: ${{ secrets.APPLE_TEAM_ID != '' }}
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
@@ -155,6 +157,7 @@ jobs:
 
       # ── Export IPA ────────────────────────────────────────────
       - name: Export IPA
+        if: ${{ secrets.APPLE_TEAM_ID != '' }}
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
@@ -187,6 +190,7 @@ jobs:
 
       # ── Upload ────────────────────────────────────────────────
       - name: Upload IPA artifact
+        if: ${{ secrets.APPLE_TEAM_ID != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ZapIt-IPA

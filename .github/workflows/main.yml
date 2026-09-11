@@ -1,35 +1,32 @@
+name: Build iOS IPA
+
 # ================================================================
 # ZapIt — iOS IPA Build Pipeline
-# GitHub Actions — buduje .ipa przez Capacitor + Xcode
-#
-# SETUP (jednorazowo):
-#  1. Masz konto Apple Developer ($99/rok) lub użyj AltStore
-#  2. W repo → Settings → Secrets dodaj:
-#       BUILD_CERTIFICATE_BASE64  (cert .p12 jako base64)
-#       P12_PASSWORD              (hasło do certyfikatu)
-#       BUILD_PROVISION_PROFILE_BASE64 (profil .mobileprovision jako base64)
-#       KEYCHAIN_PASSWORD         (dowolne hasło, np. "zapit123")
-#       APPLE_TEAM_ID             (np. "X9AB123456")
-#
-#  Alternatywa BEZ konta Developer:
-#  → Użyj AltStore / Sideloadly (patrz README.md)
 # ================================================================
-
-name: Build iOS IPA
+# SETUP — jednorazowo w GitHub repo → Settings → Secrets:
+#   BUILD_CERTIFICATE_BASE64       — plik .p12 zakodowany base64
+#   P12_PASSWORD                   — hasło do certyfikatu .p12
+#   BUILD_PROVISION_PROFILE_BASE64 — plik .mobileprovision base64
+#   KEYCHAIN_PASSWORD              — dowolne, np. "zapit123"
+#   APPLE_TEAM_ID                  — np. "X9AB123456"
+#
+# Jak zakodować pliki do base64:
+#   macOS/Linux:  base64 -i cert.p12 | tr -d '\n'
+#   Windows PS:   [Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.p12"))
+# ================================================================
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:          # uruchom ręcznie z GitHub UI
+  workflow_dispatch:
 
 env:
-  XCODE_VERSION: 'latest-stable'
-  NODE_VERSION:  '20'
-  APP_NAME:      'ZapIt'
-  BUNDLE_ID:     'com.zapit.app'
+  NODE_VERSION: '20'
 
 jobs:
-  # ── 1. WEB BUILD ────────────────────────────────────────────
+  # ────────────────────────────────────────────────────────────
+  # JOB 1 — zbuduj web assets (Ubuntu, szybciej niż macOS)
+  # ────────────────────────────────────────────────────────────
   build-web:
     name: Build Web Assets
     runs-on: ubuntu-latest
@@ -39,24 +36,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
       - name: Install deps
         run: npm ci
 
-      # Capacitor wymaga katalogu www/ z gotowym buildem
-      - name: Create www output
+      - name: Copy public → www
         run: |
           mkdir -p www
           cp -r public/* www/
 
-      - name: Upload web artifacts
+      - name: Upload www
         uses: actions/upload-artifact@v4
         with:
           name: web-dist
           path: www/
 
-  # ── 2. IOS BUILD ────────────────────────────────────────────
+  # ────────────────────────────────────────────────────────────
+  # JOB 2 — zbuduj IPA na macOS
+  # ────────────────────────────────────────────────────────────
   build-ios:
     name: Build iOS IPA
     needs: build-web
@@ -65,58 +62,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Xcode — latest-stable dostępny na runnerze
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}   # 'latest-stable' = zawsze najnowszy
+          xcode-version: latest-stable
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
-      - name: Install Node deps + Capacitor
+      - name: Install Node deps
         run: npm ci
 
-      - name: Download web build
+      - name: Download web assets
         uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: www/
 
-      # Dodaj platformę iOS (tworzy katalog ios/) i zsynchronizuj
-      - name: Capacitor add + sync iOS
+      # Capacitor — dodaj platformę iOS i zsynchronizuj
+      - name: Capacitor add iOS + sync
         run: |
           npx cap add ios
           npx cap sync ios
 
-      # ── Code signing ──────────────────────────────────────
-      - name: Install Apple certificate & provisioning profile
+      # ── Code signing ─────────────────────────────────────────
+      - name: Install certificate & provisioning profile
         env:
-          CERT_B64:     ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          CERT_PASS:    ${{ secrets.P12_PASSWORD }}
-          PP_B64:       ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
-          KP:           ${{ secrets.KEYCHAIN_PASSWORD }}
+          CERT_B64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          CERT_PASS: ${{ secrets.P12_PASSWORD }}
+          PP_B64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KP: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          CERT_PATH=$RUNNER_TEMP/cert.p12
-          PP_PATH=$RUNNER_TEMP/profile.mobileprovision
-          KP_PATH=$RUNNER_TEMP/zapit.keychain-db
+          set -euo pipefail
 
-          # macOS base64: brak --decode/-o, używamy -D i przekierowania
-          echo "$CERT_B64" | base64 -D > "$CERT_PATH"
-          echo "$PP_B64"   | base64 -D > "$PP_PATH"
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          KP_PATH="$RUNNER_TEMP/zapit.keychain-db"
 
-          # Sprawdź czy plik nie jest pusty
-          if [ ! -s "$CERT_PATH" ]; then
-            echo "ERROR: cert.p12 is empty — sprawdź secret BUILD_CERTIFICATE_BASE64"
-            exit 1
-          fi
+          # Dekoduj base64 — działa na macOS i Ubuntu
+          printf '%s' "$CERT_B64" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$PP_B64"   | base64 --decode > "$PP_PATH"
 
-          # Utwórz keychain
+          # Walidacja
+          [ -s "$CERT_PATH" ] || { echo "BŁĄD: cert.p12 pusty — sprawdź secret BUILD_CERTIFICATE_BASE64"; exit 1; }
+          [ -s "$PP_PATH"   ] || { echo "BŁĄD: profile pusty — sprawdź secret BUILD_PROVISION_PROFILE_BASE64"; exit 1; }
+
+          # Utwórz i odblokuj keychain
           security create-keychain -p "$KP" "$KP_PATH"
           security set-keychain-settings -lut 21600 "$KP_PATH"
           security unlock-keychain -p "$KP" "$KP_PATH"
 
-          # Importuj certyfikat — flaga -A zezwala każdej apce, -T dla codesign/Xcode
+          # Importuj certyfikat
           security import "$CERT_PATH" \
             -P "$CERT_PASS" \
             -A \
@@ -126,55 +123,70 @@ jobs:
             -T /usr/bin/codesign \
             -T /usr/bin/security
 
-          # Pozwól na dostęp bez UI prompt
+          # Zezwól na dostęp bez UI prompt (krytyczne na CI)
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: \
             -s -k "$KP" "$KP_PATH"
 
-          # Dodaj keychain do listy systemowej
+          # Dodaj keychain do listy użytkownika
           security list-keychain -d user -s "$KP_PATH" login.keychain-db
 
-          # Skopiuj provisioning profile
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          # Zainstaluj provisioning profile
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           UUID=$(security cms -D -i "$PP_PATH" | plutil -extract UUID raw -)
-          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"$UUID".mobileprovision
-          echo "Profile UUID: $UUID"
+          cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          echo "Provisioning profile UUID: $UUID"
 
-      # ── Xcode Archive ─────────────────────────────────────
-      - name: Build archive
+      # ── Xcode Archive ─────────────────────────────────────────
+      - name: Build Xcode archive
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          set -o pipefail
           xcodebuild archive \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/ZapIt.xcarchive \
+            -archivePath "$RUNNER_TEMP/ZapIt.xcarchive" \
             -destination "generic/platform=iOS" \
             CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            | xcpretty
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            2>&1 | tee build.log
 
-      # ── Export IPA ────────────────────────────────────────
+      # ── Export IPA ────────────────────────────────────────────
       - name: Export IPA
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cat > $RUNNER_TEMP/ExportOptions.plist << EOF
+          set -euo pipefail
+
+          # Plist musi być w osobnym pliku — GitHub nie podstawia secrets w heredoc
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>method</key><string>development</string>
-            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
-            <key>signingStyle</key><string>manual</string>
-            <key>stripSwiftSymbols</key><true/>
-            <key>compileBitcode</key><false/>
-          </dict></plist>
-          EOF
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>teamID</key>
+            <string>${TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          PLIST
 
           xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/ZapIt.xcarchive \
-            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/ZapIt-IPA
+            -archivePath "$RUNNER_TEMP/ZapIt.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/ZapIt-IPA"
 
-      # ── Upload artifact ───────────────────────────────────
-      - name: Upload IPA
+      # ── Upload ────────────────────────────────────────────────
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ZapIt-IPA
@@ -183,17 +195,4 @@ jobs:
 
       - name: Cleanup keychain
         if: always()
-        run: security delete-keychain $RUNNER_TEMP/zapit.keychain-db || true
-
-  # ── 3. ALT-STORE SIDELOAD (BEZ KONTA APPLE) ─────────────────
-  # Jeśli nie masz konta Developer, użyj alternatywy:
-  #
-  # Option A — AltStore / Sideloadly (na PC/Mac):
-  #   1. Pobierz Sideloadly: https://sideloadly.io
-  #   2. Podłącz iPhone USB
-  #   3. Przeciągnij .ipa → Sideloadly → Install
-  #   (ważne przez 7 dni z darmowym kontem Apple)
-  #
-  # Option B — TrollStore (iPhone z iOS 14-16.6.1):
-  #   Nie wymaga konta Apple, działa permanentnie
-  #   https://github.com/opa334/TrollStore
+        run: security delete-keychain "$RUNNER_TEMP/zapit.keychain-db" || true

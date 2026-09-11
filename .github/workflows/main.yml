@@ -83,9 +83,11 @@ jobs:
           name: web-dist
           path: www/
 
-      # Sync web → iOS native project
-      - name: Capacitor sync iOS
-        run: npx cap sync ios
+      # Dodaj platformę iOS (tworzy katalog ios/) i zsynchronizuj
+      - name: Capacitor add + sync iOS
+        run: |
+          npx cap add ios
+          npx cap sync ios
 
       # ── Code signing ──────────────────────────────────────
       - name: Install Apple certificate & provisioning profile

@@ -2,7 +2,6 @@
   "appId": "com.zapit.app",
   "appName": "ZapIt",
   "webDir": "www",
-  "bundledWebRuntime": false,
   "server": {
     "allowNavigation": ["http://localhost:3737"]
   },

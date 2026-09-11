@@ -1,0 +1,20 @@
+{
+  "appId": "com.zapit.app",
+  "appName": "ZapIt",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "allowNavigation": ["http://localhost:3737"]
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "allowsLinkPreview": false,
+    "backgroundColor": "#000000"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "backgroundColor": "#000000"
+    }
+  }
+}

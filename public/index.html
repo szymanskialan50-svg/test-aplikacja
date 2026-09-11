@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="ZapIt"/>
+  <title>ZapIt</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    /* ── RESET & BASE ─────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html { height: 100%; background: #000; }
+    body {
+      height: 100%;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #000;
+      color: #fff;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ── APP SHELL ────────────────────────────── */
+    #app { height: 100dvh; display: flex; flex-direction: column; }
+
+    /* ── HEADER ───────────────────────────────── */
+    #header {
+      padding: 52px 20px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .logo { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo span { color: #fff; }
+    #scan-btn {
+      background: #1a1a1a; border: none; color: #fff;
+      padding: 8px 16px; border-radius: 20px;
+      font-size: 14px; font-weight: 500;
+      cursor: pointer; font-family: inherit;
+      transition: background 0.15s;
+    }
+    #scan-btn:active { background: #2a2a2a; }
+    #scan-btn.scanning { color: #888; }
+
+    /* ── STATUS BAR ──────────────────────────── */
+    #status-bar {
+      padding: 0 20px 12px;
+      font-size: 13px; color: #666;
+      flex-shrink: 0;
+    }
+    #status-bar.found { color: #fff; }
+    #status-bar.error { color: #ff453a; }
+
+    /* ── DEVICE LIST ─────────────────────────── */
+    #device-list {
+      flex: 1; overflow-y: auto;
+      padding: 0 16px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    #device-list::-webkit-scrollbar { display: none; }
+
+    /* empty state */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; color: #333; text-align: center;
+      padding: 40px;
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 8px; }
+    .empty-title { font-size: 17px; font-weight: 600; color: #555; }
+    .empty-sub { font-size: 14px; color: #333; line-height: 1.5; }
+
+    /* device row */
+    .device-row {
+      display: flex; align-items: center;
+      padding: 14px 16px; border-radius: 14px;
+      background: #111;
+      cursor: pointer; gap: 14px;
+      transition: background 0.1s;
+      border: 1px solid transparent;
+    }
+    .device-row:active { background: #1c1c1c; }
+    .device-row.selected {
+      background: #141414;
+      border-color: #333;
+    }
+    .device-icon { font-size: 30px; flex-shrink: 0; width: 40px; text-align: center; }
+    .device-info { flex: 1; min-width: 0; }
+    .device-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .device-meta { font-size: 12px; color: #555; margin-top: 2px; }
+    .device-ip   { font-size: 12px; color: #444; font-variant-numeric: tabular-nums; }
+    .device-check {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid #333;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .device-row.selected .device-check {
+      background: #fff; border-color: #fff; color: #000;
+    }
+
+    /* ── BOTTOM CONTROLS ─────────────────────── */
+    #bottom {
+      padding: 16px 20px 32px;
+      flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    /* Mode selector */
+    #mode-row {
+      display: flex; gap: 8px;
+    }
+    .mode-chip {
+      flex: 1; padding: 10px 4px; border-radius: 10px;
+      background: #111; border: none; color: #555;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .mode-chip.active {
+      background: #1a1a1a; color: #fff;
+    }
+
+    /* Main ZAP button */
+    #zap-btn {
+      width: 100%;
+      padding: 18px;
+      border-radius: 14px;
+      border: none;
+      background: #fff;
+      color: #000;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: 0.3px;
+      transition: transform 0.1s, background 0.15s;
+    }
+    #zap-btn:active { transform: scale(0.97); background: #e0e0e0; }
+    #zap-btn:disabled { background: #222; color: #444; transform: none; cursor: default; }
+    #zap-btn.sending { background: #1a1a1a; color: #888; }
+
+    /* Result toast */
+    #toast {
+      position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+      background: #1c1c1c; color: #fff;
+      padding: 12px 20px; border-radius: 12px;
+      font-size: 14px; font-weight: 500;
+      opacity: 0; transition: opacity 0.2s;
+      white-space: nowrap; z-index: 100;
+      max-width: 90vw; text-align: center;
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok  { color: #30d158; }
+    #toast.err { color: #ff453a; }
+
+    /* Loading spinner */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid #333;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block; vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* BLE badge */
+    .ble-badge {
+      display: inline-block;
+      font-size: 10px; color: #555; background: #1a1a1a;
+      padding: 2px 6px; border-radius: 4px; margin-left: 6px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="logo">⚡ <span>ZapIt</span></div>
+    <button id="scan-btn" onclick="startScan()">Skanuj</button>
+  </div>
+
+  <!-- STATUS -->
+  <div id="status-bar">Naciśnij Skanuj żeby znaleźć urządzenia w sieci</div>
+
+  <!-- DEVICE LIST -->
+  <div id="device-list">
+    <div class="empty-state">
+      <div class="empty-icon">📡</div>
+      <div class="empty-title">Brak urządzeń</div>
+      <div class="empty-sub">Skanuje LAN + SSDP w Twojej sieci Wi-Fi.<br>Urządzenia muszą być w tej samej sieci.</div>
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div id="bottom">
+    <div id="mode-row">
+      <button class="mode-chip active" id="chip-off"     onclick="setMode('off')"     >Wyłącz</button>
+      <button class="mode-chip"        id="chip-on"      onclick="setMode('on')"      >Włącz</button>
+      <button class="mode-chip"        id="chip-mute"    onclick="setMode('mute')"    >Mute</button>
+      <button class="mode-chip"        id="chip-vol_up"  onclick="setMode('vol_up')"  >Vol+</button>
+      <button class="mode-chip"        id="chip-vol_down"onclick="setMode('vol_down')">Vol−</button>
+    </div>
+    <button id="zap-btn" disabled onclick="doZap()">Wybierz urządzenie</button>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ── CONFIG ─────────────────────────────────── */
+const API = 'http://localhost:3737/api';
+
+const ICONS = {
+  samsung_tv: '📺', lg_tv: '📺', sony_tv: '📺', philips_tv: '📺',
+  chromecast: '📺', roku: '📺', sonos: '🔊', receiver: '📻',
+  printer: '🖨️', router: '📡', unknown: '🔌',
+};
+
+/* ── STATE ──────────────────────────────────── */
+let devices    = [];
+let selected   = null;
+let mode       = 'off';
+let scanning   = false;
+
+/* ── ELEMENTS ──────────────────────────────── */
+const listEl    = document.getElementById('device-list');
+const statusEl  = document.getElementById('status-bar');
+const zapBtn    = document.getElementById('zap-btn');
+const scanBtn   = document.getElementById('scan-btn');
+const toastEl   = document.getElementById('toast');
+
+/* ── SCAN ───────────────────────────────────── */
+async function startScan() {
+  if (scanning) return;
+  scanning = true;
+  selected = null;
+
+  scanBtn.textContent = 'Skanowanie…';
+  scanBtn.classList.add('scanning');
+  zapBtn.disabled = true;
+  zapBtn.textContent = 'Szukam urządzeń…';
+
+  listEl.innerHTML = `<div class="empty-state">
+    <div class="empty-icon"><span class="spinner"></span></div>
+    <div class="empty-title">Skanowanie sieci…</div>
+    <div class="empty-sub">SSDP multicast + LAN scan<br>Może potrwać 5–10 sekund</div>
+  </div>`;
+  setStatus('Skanowanie SSDP + LAN…', '');
+
+  try {
+    const resp = await fetch(`${API}/discover`, { signal: AbortSignal.timeout(15000) });
+    const data = await resp.json();
+    devices = data.devices || [];
+
+    if (devices.length === 0) {
+      setStatus('Nie znaleziono urządzeń w sieci', 'error');
+      listEl.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">Nic nie znaleziono</div>
+        <div class="empty-sub">Upewnij się, że urządzenia są w tej samej sieci Wi-Fi.<br>Spróbuj ponownie.</div>
+      </div>`;
+    } else {
+      setStatus(`Znaleziono ${devices.length} urządzeń`, 'found');
+      renderDevices();
+    }
+  } catch (e) {
+    setStatus('Błąd połączenia z backendem — upewnij się że node server.js działa', 'error');
+    listEl.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">⚠️</div>
+      <div class="empty-title">Brak backendu</div>
+      <div class="empty-sub">Uruchom: <code>node server.js</code><br>w folderze zapit-prank</div>
+    </div>`;
+  } finally {
+    scanning = false;
+    scanBtn.textContent = 'Skanuj';
+    scanBtn.classList.remove('scanning');
+    updateZapBtn();
+  }
+}
+
+/* ── RENDER DEVICES ─────────────────────────── */
+function renderDevices() {
+  listEl.innerHTML = devices.map((d, i) => `
+    <div class="device-row ${selected === i ? 'selected' : ''}"
+         id="dev-${i}" onclick="selectDevice(${i})">
+      <div class="device-icon">${ICONS[d.type] || '🔌'}</div>
+      <div class="device-info">
+        <div class="device-name">${d.name || d.type}</div>
+        <div class="device-meta">${d.label || d.type || d.st || ''}</div>
+        <div class="device-ip">${d.ip}${d.port ? ':' + d.port : ''}</div>
+      </div>
+      <div class="device-check">${selected === i ? '✓' : ''}</div>
+    </div>
+  `).join('');
+}
+
+function selectDevice(i) {
+  selected = (selected === i) ? null : i;
+  renderDevices();
+  updateZapBtn();
+}
+
+/* ── MODE ───────────────────────────────────── */
+window.setMode = function(m) {
+  mode = m;
+  document.querySelectorAll('.mode-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById(`chip-${m}`)?.classList.add('active');
+  updateZapBtn();
+};
+
+/* ── ZAP ────────────────────────────────────── */
+function updateZapBtn() {
+  if (selected === null) {
+    zapBtn.disabled = true;
+    zapBtn.textContent = devices.length ? 'Wybierz urządzenie' : 'Skanuj sieć';
+    return;
+  }
+  const d = devices[selected];
+  const labels = { off:'Wyłącz', on:'Włącz', mute:'Mute', vol_up:'Głośniej', vol_down:'Ciszej' };
+  zapBtn.disabled = false;
+  zapBtn.textContent = `${labels[mode] || mode} — ${d.name || d.ip}`;
+}
+
+async function doZap() {
+  if (selected === null || zapBtn.disabled) return;
+  const d = devices[selected];
+
+  zapBtn.disabled = true;
+  zapBtn.classList.add('sending');
+  zapBtn.textContent = 'Wysyłam…';
+
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+
+  try {
+    const resp = await fetch(`${API}/control`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip: d.ip, type: d.type, action: mode }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const result = await resp.json();
+
+    if (result.ok) {
+      showToast(`✓ ${mode === 'off' ? 'Wyłączono' : mode === 'on' ? 'Włączono' : 'Wysłano'}: ${d.name || d.ip}`, 'ok');
+      if (navigator.vibrate) navigator.vibrate(200);
+    } else {
+      showToast(`⚠️ ${result.error || result.reason || 'Brak odpowiedzi od urządzenia'}`, 'err');
+    }
+  } catch (e) {
+    showToast(`✗ ${e.message}`, 'err');
+  } finally {
+    zapBtn.classList.remove('sending');
+    zapBtn.disabled = false;
+    updateZapBtn();
+  }
+}
+
+/* ── HELPERS ─────────────────────────────────── */
+function setStatus(msg, cls) {
+  statusEl.textContent = msg;
+  statusEl.className   = cls || '';
+}
+
+let toastTimer = null;
+function showToast(msg, type) {
+  toastEl.textContent = msg;
+  toastEl.className   = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3000);
+}
+
+/* ── SERVICE WORKER ──────────────────────────── */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+</script>
+</body>
+</html>

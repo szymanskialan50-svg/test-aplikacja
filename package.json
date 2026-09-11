@@ -1,0 +1,21 @@
+{
+  "name": "zapit",
+  "version": "1.0.0",
+  "description": "ZapIt — real device scanner and controller",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-ssdp": "^4.0.1",
+    "ws": "^8.17.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/ios": "^6.1.0"
+  }
+}

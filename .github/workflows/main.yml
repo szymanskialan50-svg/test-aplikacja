@@ -58,6 +58,9 @@ jobs:
     name: Build iOS IPA
     needs: build-web
     runs-on: macos-latest
+    # Flaga — true gdy wszystkie secrety Apple są ustawione
+    env:
+      HAS_CERTS: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' && secrets.P12_PASSWORD != '' && secrets.BUILD_PROVISION_PROFILE_BASE64 != '' && secrets.KEYCHAIN_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -86,9 +89,9 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
-      # ── Code signing ─────────────────────────────────────────
+      # ── Code signing (pomijane gdy brak secretów Apple) ────────
       - name: Install certificate & provisioning profile
-        if: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' && secrets.P12_PASSWORD != '' && secrets.BUILD_PROVISION_PROFILE_BASE64 != '' && secrets.KEYCHAIN_PASSWORD != '' }}
+        if: env.HAS_CERTS == 'true'
         env:
           CERT_B64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           CERT_PASS: ${{ secrets.P12_PASSWORD }}
@@ -140,7 +143,7 @@ jobs:
 
       # ── Xcode Archive ─────────────────────────────────────────
       - name: Build Xcode archive
-        if: ${{ secrets.APPLE_TEAM_ID != '' }}
+        if: env.HAS_CERTS == 'true'
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
@@ -157,7 +160,7 @@ jobs:
 
       # ── Export IPA ────────────────────────────────────────────
       - name: Export IPA
-        if: ${{ secrets.APPLE_TEAM_ID != '' }}
+        if: env.HAS_CERTS == 'true'
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
@@ -190,12 +193,19 @@ jobs:
 
       # ── Upload ────────────────────────────────────────────────
       - name: Upload IPA artifact
-        if: ${{ secrets.APPLE_TEAM_ID != '' }}
+        if: env.HAS_CERTS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ZapIt-IPA
           path: ${{ runner.temp }}/ZapIt-IPA/*.ipa
           retention-days: 30
+
+      - name: Print info when secrets missing
+        if: env.HAS_CERTS != 'true'
+        run: |
+          echo "⚠️  Brak secretów Apple — pominięto podpisywanie i budowanie IPA."
+          echo "    Dodaj w repo: Settings → Secrets and variables → Actions:"
+          echo "    BUILD_CERTIFICATE_BASE64, P12_PASSWORD, BUILD_PROVISION_PROFILE_BASE64, KEYCHAIN_PASSWORD, APPLE_TEAM_ID"
 
       - name: Cleanup keychain
         if: always()

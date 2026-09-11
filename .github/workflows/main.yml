@@ -23,7 +23,7 @@ on:
   workflow_dispatch:          # uruchom ręcznie z GitHub UI
 
 env:
-  XCODE_VERSION: '15.4'
+  XCODE_VERSION: 'latest-stable'
   NODE_VERSION:  '20'
   APP_NAME:      'ZapIt'
   BUNDLE_ID:     'com.zapit.app'
@@ -67,7 +67,7 @@ jobs:
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
+          xcode-version: ${{ env.XCODE_VERSION }}   # 'latest-stable' = zawsze najnowszy
 
       - uses: actions/setup-node@v4
         with:
@@ -155,7 +155,7 @@ jobs:
 
       - name: Cleanup keychain
         if: always()
-        run: security delete-keychain $RUNNER_TEMP/zapit.keychain-db
+        run: security delete-keychain $RUNNER_TEMP/zapit.keychain-db || true
 
   # ── 3. ALT-STORE SIDELOAD (BEZ KONTA APPLE) ─────────────────
   # Jeśli nie masz konta Developer, użyj alternatywy:
